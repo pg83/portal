@@ -59,13 +59,10 @@ func try(cb func()) (err *Exception) {
 
 // end of runtime
 
-type portal struct {
-}
-
 type kv map[string]dbus.Variant
 
 func xdgOpen(url string) {
-	args := []string{"xdg-open", url}
+	args := []string{"xdg-open-dispatch", url}
 	path, err := exec.LookPath(args[0])
 
 	if err != nil {
@@ -78,6 +75,9 @@ func xdgOpen(url string) {
 	}
 
 	cmd.Run()
+}
+
+type portal struct {
 }
 
 func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
@@ -115,9 +115,9 @@ func run() {
 	conn := sessionBus()
 	defer conn.Close()
 
-	p := portal{}
+	p := &portal{}
 
-	conn.Export(&p, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
+	conn.Export(p, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
 
 	bind(conn, "org.freedesktop.portal.Desktop")
 
