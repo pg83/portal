@@ -61,20 +61,30 @@ func try(cb func()) (err *Exception) {
 
 type kv map[string]dbus.Variant
 
-func xdgOpen(url string) {
-	args := []string{"xdg-open-dispatch", url}
-	path, err := exec.LookPath(args[0])
+func lookPath(prog string) string {
+	path, err := exec.LookPath(prog)
 
 	if err != nil {
-		panic(err)
+		fmtException("can not find %s: %v", prog, err).throw()
 	}
+
+	return path
+}
+
+func xdgOpen(url string) {
+	args := []string{"xdg-open-dispatch", url}
+	path := lookPath(args[0])
 
 	cmd := &exec.Cmd{
 		Path: path,
 		Args: args,
 	}
 
-	cmd.Run()
+	err := cmd.Run()
+
+	if err != nil {
+		fmtException("xdg-open-dispatch: %v", err).throw()
+	}
 }
 
 type portal struct {
@@ -82,8 +92,12 @@ type portal struct {
 
 func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
 	go func() {
-		fmt.Fprintln(os.Stderr, parent, uri, options)
-		xdgOpen(uri);
+		try(func() {
+			fmt.Fprintln(os.Stderr, "OpenURI", parent, uri, options)
+			xdgOpen(uri);
+		}).catch(func(exc *Exception) {
+			fmt.Fprintln(os.Stderr, "OpenURI", exc.what())
+		})
 	}()
 
 	return nil
