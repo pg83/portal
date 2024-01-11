@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 	"fmt"
-	"time"
+	"log"
 	"os/exec"
 	"strings"
 	"github.com/godbus/dbus/v5"
@@ -121,10 +121,10 @@ func (r *request) response(errcode uint32, results kv) {
 func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
 	go func() {
 		try(func() {
-			fmt.Fprintln(os.Stderr, "OpenURI", parent, uri, options)
+			log.Println("OpenURI", parent, uri, options)
 			xdgOpen(uri);
 		}).catch(func(exc *Exception) {
-			fmt.Fprintln(os.Stderr, "OpenURI", exc.what())
+			log.Println("OpenURI", exc.what())
 		})
 	}()
 
@@ -132,16 +132,22 @@ func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
 }
 
 func (p *portal) OpenFile(sender dbus.Sender, parent string, title string, options kv) (dbus.ObjectPath, *dbus.Error) {
-	fmt.Fprintln(os.Stderr, "OpenFile", sender, parent, title, options)
+	log.Println("OpenFile", sender, parent, title, options)
 
 	tok := options["handle_token"]
 	req := newRequest(p.conn, string(sender), tok.Value().(string))
 
 	go func() {
-		time.Sleep(1000 * time.Millisecond)
-		res := kv{}
-		res["uris"] = dbus.MakeVariant([]string{"file:////qwqwqw"})
-		req.response(0, res)
+		pat, err := exec.Command("zenity", "--file-selection").Output()
+
+		if err != nil {
+			req.response(1, kv{})
+			log.Fatal(err)
+		} else {
+			res := kv{}
+			res["uris"] = dbus.MakeVariant([]string{string(pat)})
+			req.response(0, res)
+		}
 	}()
 
 	return req.path, nil
