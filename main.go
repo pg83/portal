@@ -3,7 +3,9 @@ package main
 import (
 	"os"
 	"fmt"
+	"time"
 	"os/exec"
+	"strings"
 	"github.com/godbus/dbus/v5"
 )
 
@@ -88,6 +90,32 @@ func xdgOpen(url string) {
 }
 
 type portal struct {
+	conn *dbus.Conn
+}
+
+type request struct {
+	conn *dbus.Conn
+	path dbus.ObjectPath
+}
+
+func newRequest(conn *dbus.Conn, sender string, token string) *request {
+	sender, _ = strings.CutPrefix(sender, ":")
+	sender = strings.ReplaceAll(sender, ".", "_")
+
+	path := fmt.Sprintf("/org/freedesktop/portal/desktop/request/%s/%s", sender, token)
+
+	return &request{
+		conn: conn,
+		path: dbus.ObjectPath(path),
+	}
+}
+
+func (r *request) response(errcode uint32, results kv) {
+	err := r.conn.Emit(r.path, "org.freedesktop.portal.Request.Response", errcode, results)
+
+	if err != nil {
+		fmtException("can not send response: %v", err).throw()
+	}
 }
 
 func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
@@ -101,6 +129,22 @@ func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
 	}()
 
 	return nil
+}
+
+func (p *portal) OpenFile(sender dbus.Sender, parent string, title string, options kv) (dbus.ObjectPath, *dbus.Error) {
+	fmt.Fprintln(os.Stderr, "OpenFile", sender, parent, title, options)
+
+	tok := options["handle_token"]
+	req := newRequest(p.conn, string(sender), tok.Value().(string))
+
+	go func() {
+		time.Sleep(1000 * time.Millisecond)
+		res := kv{}
+		res["uris"] = dbus.MakeVariant([]string{"file:////qwqwqw"})
+		req.response(0, res)
+	}()
+
+	return req.path, nil
 }
 
 func bind(conn *dbus.Conn, service string) {
@@ -129,9 +173,12 @@ func run() {
 	conn := sessionBus()
 	defer conn.Close()
 
-	p := &portal{}
+	p := &portal{
+		conn: conn,
+	}
 
 	conn.Export(p, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
+	conn.Export(p, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
 
 	bind(conn, "org.freedesktop.portal.Desktop")
 
