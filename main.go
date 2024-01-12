@@ -168,6 +168,38 @@ func (p *FileChooser) OpenFile(sender dbus.Sender, parent string, title string, 
 	return req.path, nil
 }
 
+type Settings struct {
+	portal *portal
+}
+
+func box(v interface{}) *dbus.Variant {
+	if v == nil {
+		return nil
+	}
+
+	res := dbus.MakeVariant(v)
+
+	return &res
+}
+
+func (p *Settings) ReadOne(sender dbus.Sender, namespace string, key string) (*dbus.Variant, *dbus.Error) {
+	log.Println("enter ReadOne", sender, namespace, key)
+
+	path := namespace + "." + key
+
+	if path == "org.freedesktop.appearance.color-scheme" {
+		return box(uint32(1)), nil
+	}
+
+	return nil, &dbus.ErrMsgNoObject
+}
+
+func (p *Settings) Read(sender dbus.Sender, namespace string, key string) (*dbus.Variant, *dbus.Error) {
+	res, err := p.ReadOne(sender, namespace, key)
+
+	return box(res), err
+}
+
 func bind(conn *dbus.Conn, service string) {
 	reply, err := conn.RequestName(service, dbus.NameFlagDoNotQueue)
 
@@ -209,6 +241,12 @@ func run() {
 	}
 
 	conn.Export(fc, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
+
+	st := &Settings{
+		portal: portal,
+	}
+
+	conn.Export(st, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Settings")
 
 	bind(conn, "org.freedesktop.portal.Desktop")
 
