@@ -119,12 +119,13 @@ func (r *request) response(errcode uint32, results kv) {
 }
 
 func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
+	log.Println("enter OpenURI", parent, uri, options)
+
 	go func() {
 		try(func() {
-			log.Println("OpenURI", parent, uri, options)
 			xdgOpen(uri);
 		}).catch(func(exc *Exception) {
-			log.Println("OpenURI", exc.what())
+			log.Println("in OpenURI", exc.what())
 		})
 	}()
 
@@ -132,22 +133,28 @@ func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
 }
 
 func (p *portal) OpenFile(sender dbus.Sender, parent string, title string, options kv) (dbus.ObjectPath, *dbus.Error) {
-	log.Println("OpenFile", sender, parent, title, options)
+	log.Println("enter OpenFile", sender, parent, title, options)
 
 	tok := options["handle_token"]
 	req := newRequest(p.conn, string(sender), tok.Value().(string))
 
 	go func() {
-		pat, err := exec.Command("zenity", "--file-selection").Output()
+		try(func() {
+			pat, err := exec.Command("zenity", "--file-selection").Output()
 
-		if err != nil {
-			req.response(1, kv{})
-			log.Fatal(err)
-		} else {
-			res := kv{}
-			res["uris"] = dbus.MakeVariant([]string{string(pat)})
-			req.response(0, res)
-		}
+			if err != nil {
+				log.Println(err)
+				req.response(1, kv{})
+			} else {
+				req.response(0, kv{
+					"uris": dbus.MakeVariant([]string{
+						"file://" + strings.TrimSpace(string(pat)),
+					}),
+				})
+			}
+		}).catch(func(exc *Exception) {
+			log.Println("in OpenFile", exc.what())
+		})
 	}()
 
 	return req.path, nil
