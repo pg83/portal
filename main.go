@@ -118,7 +118,11 @@ func (r *request) response(errcode uint32, results kv) {
 	}
 }
 
-func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
+type OpenURI struct {
+	portal *portal
+}
+
+func (p *OpenURI) OpenURI(parent string, uri string, options *kv) *dbus.Error {
 	log.Println("enter OpenURI", parent, uri, options)
 
 	go func() {
@@ -132,11 +136,15 @@ func (p *portal) OpenURI(parent string, uri string, options *kv) *dbus.Error {
 	return nil
 }
 
-func (p *portal) OpenFile(sender dbus.Sender, parent string, title string, options kv) (dbus.ObjectPath, *dbus.Error) {
+type FileChooser struct {
+	portal *portal
+}
+
+func (p *FileChooser) OpenFile(sender dbus.Sender, parent string, title string, options kv) (dbus.ObjectPath, *dbus.Error) {
 	log.Println("enter OpenFile", sender, parent, title, options)
 
 	tok := options["handle_token"]
-	req := newRequest(p.conn, string(sender), tok.Value().(string))
+	req := newRequest(p.portal.conn, string(sender), tok.Value().(string))
 
 	go func() {
 		try(func() {
@@ -186,12 +194,21 @@ func run() {
 	conn := sessionBus()
 	defer conn.Close()
 
-	p := &portal{
+	portal := &portal{
 		conn: conn,
 	}
 
-	conn.Export(p, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
-	conn.Export(p, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
+	ou := &OpenURI{
+		portal: portal,
+	}
+
+	conn.Export(ou, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
+
+	fc := &FileChooser{
+		portal: portal,
+	}
+
+	conn.Export(fc, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
 
 	bind(conn, "org.freedesktop.portal.Desktop")
 
