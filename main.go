@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"github.com/godbus/dbus/v5"
+	"github.com/godbus/dbus/v5/prop"
 )
 
 // exception runtime
@@ -226,6 +227,8 @@ func run() {
 	conn := sessionBus()
 	defer conn.Close()
 
+	path := dbus.ObjectPath("/org/freedesktop/portal/desktop")
+
 	portal := &portal{
 		conn: conn,
 	}
@@ -234,19 +237,43 @@ func run() {
 		portal: portal,
 	}
 
-	conn.Export(ou, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.OpenURI")
+	conn.Export(ou, path, "org.freedesktop.portal.OpenURI")
 
 	fc := &FileChooser{
 		portal: portal,
 	}
 
-	conn.Export(fc, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
+	conn.Export(fc, path, "org.freedesktop.portal.FileChooser")
 
 	st := &Settings{
 		portal: portal,
 	}
 
-	conn.Export(st, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Settings")
+	conn.Export(st, path, "org.freedesktop.portal.Settings")
+
+	props := map[string]map[string]*prop.Prop{
+		"org.freedesktop.portal.OpenURI": {
+			"version": {
+				Value: uint32(4),
+			},
+		},
+		"org.freedesktop.portal.FileChooser": {
+			"version": {
+				Value: uint32(3),
+			},
+		},
+		"org.freedesktop.portal.Settings": {
+			"version": {
+				Value: uint32(1),
+			},
+		},
+	}
+
+	_, err := prop.Export(conn, path, props)
+
+	if err != nil {
+		fmtException("can not bind properties: %w", err).throw()
+	}
 
 	bind(conn, "org.freedesktop.portal.Desktop")
 
